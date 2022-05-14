@@ -22,3 +22,7 @@
                         config/pvt/my_pvt_AtrousLSHTransformer.py  
                         mmdet/model/backbone/PVT_AtrousLSHTransformer.py  
                         __init__.py  
+
+###  *2022 0514*
+                * 证明MMdetection与darknet存在不同,在mmdetection的config文件下设置的epoch不会受到预训练模型的干扰;
+                * 

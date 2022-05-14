@@ -4,6 +4,7 @@ _base_ = [
     '../_base_/schedules/schedule_1x.py', '../_base_/default_runtime.py'
 ]
 
+#用于测试一些小环节的config文件
 model = dict(
     type='RetinaNet',
     backbone=dict(
