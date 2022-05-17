@@ -134,8 +134,8 @@ class SpatialReductionAttention(MultiheadAttention):
                  dropout_layer=None,
                  batch_first=True,
                  qkv_bias=True,
-                 norm_cfg=dict(type='LN'),
-                 sr_ratio=1,
+                 norm_cfg=dict(type='LN'), #
+                 sr_ratio=1, #
                  init_cfg=None):
         super().__init__(
             embed_dims,
@@ -187,10 +187,10 @@ class SpatialReductionAttention(MultiheadAttention):
         # (num_query ,batch, embed_dims), and recover ``attn_output``
         # from num_query_first to batch_first.
         if self.batch_first:
-            x_q = x_q.transpose(0, 1)
+            x_q = x_q.transpose(0, 1)   # Batch query dim ->query Batch dim
             x_kv = x_kv.transpose(0, 1)
 
-        out = self.attn(query=x_q, key=x_kv, value=x_kv)[0]
+        out = self.attn(query=x_q, key=x_kv, value=x_kv)[0]  #继承自MultiheadAttention
 
         if self.batch_first:
             out = out.transpose(0, 1)
@@ -301,7 +301,7 @@ class AbsolutePositionEmbedding(BaseModule):
     def __init__(self, pos_shape, pos_dim, drop_rate=0., init_cfg=None):
         super().__init__(init_cfg=init_cfg)
 
-        if isinstance(pos_shape, int):
+        if isinstance(pos_shape, int): #检查pose_shape是否为int类型
             pos_shape = to_2tuple(pos_shape)
         elif isinstance(pos_shape, tuple):
             if len(pos_shape) == 1:
@@ -313,7 +313,7 @@ class AbsolutePositionEmbedding(BaseModule):
         self.pos_dim = pos_dim
 
         self.pos_embed = nn.Parameter(
-            torch.zeros(1, pos_shape[0] * pos_shape[1], pos_dim))
+            torch.zeros(1, pos_shape[0] * pos_shape[1], pos_dim)) #生成可优化的零矩阵
         self.drop = nn.Dropout(p=drop_rate)
 
     def init_weights(self):
@@ -337,12 +337,12 @@ class AbsolutePositionEmbedding(BaseModule):
         """
         assert pos_embed.ndim == 3, 'shape of pos_embed must be [B, L, C]'
         pos_h, pos_w = self.pos_shape
-        pos_embed_weight = pos_embed[:, (-1 * pos_h * pos_w):]
+        pos_embed_weight = pos_embed[:, (-1 * pos_h * pos_w):]  #取数据
         pos_embed_weight = pos_embed_weight.reshape(
-            1, pos_h, pos_w, self.pos_dim).permute(0, 3, 1, 2).contiguous()
+            1, pos_h, pos_w, self.pos_dim).permute(0, 3, 1, 2).contiguous()  #变换维度 [1 h w dim]  ->  [1  dim  h  w] 
         pos_embed_weight = F.interpolate(
-            pos_embed_weight, size=input_shape, mode=mode)
-        pos_embed_weight = torch.flatten(pos_embed_weight,
+            pos_embed_weight, size=input_shape, mode=mode) #数组采样 mode=mode
+        pos_embed_weight = torch.flatten(pos_embed_weight,  #第2维度展开[1 dim L] 变换 -> [1 L dim]
                                          2).transpose(1, 2).contiguous()
         pos_embed = pos_embed_weight
 
@@ -415,11 +415,11 @@ class PyramidVisionTransformer(BaseModule):
                  num_layers=[3, 4, 6, 3],
                  num_heads=[1, 2, 5, 8],
                  patch_sizes=[4, 2, 2, 2],
-                 strides=[4, 2, 2, 2],
+                 strides=[4, 2, 2, 2], ##注意此处
                  paddings=[0, 0, 0, 0],
                  sr_ratios=[8, 4, 2, 1],
                  out_indices=(0, 1, 2, 3),
-                 mlp_ratios=[8, 8, 4, 4],
+                 mlp_ratios=[8, 8, 4, 4],  
                  qkv_bias=True,
                  drop_rate=0.,
                  attn_drop_rate=0.,
@@ -473,12 +473,12 @@ class PyramidVisionTransformer(BaseModule):
         # transformer encoder
         dpr = [
             x.item()
-            for x in torch.linspace(0, drop_path_rate, sum(num_layers))
+            for x in torch.linspace(0, drop_path_rate, sum(num_layers))  #随机层数衰减relu
         ]  # stochastic num_layer decay rule
 
         cur = 0
         self.layers = ModuleList()
-        for i, num_layer in enumerate(num_layers):
+        for i, num_layer in enumerate(num_layers): #enumrate 枚举索引和值
             embed_dims_i = embed_dims * num_heads[i]
             patch_embed = PatchEmbed(
                 in_channels=in_channels,
@@ -511,14 +511,14 @@ class PyramidVisionTransformer(BaseModule):
                     sr_ratio=sr_ratios[i],
                     use_conv_ffn=use_conv_ffn) for idx in range(num_layer)
             ])
-            in_channels = embed_dims_i
+            in_channels = embed_dims_i #下一循环的输入
             # The ret[0] of build_norm_layer is norm name.
             if norm_after_stage:
                 norm = build_norm_layer(norm_cfg, embed_dims_i)[1]
             else:
                 norm = nn.Identity()
             self.layers.append(ModuleList([patch_embed, layers, norm]))
-            cur += num_layer
+            cur += num_layer  #总层数
 
     def init_weights(self):
         logger = get_root_logger()
@@ -574,21 +574,6 @@ class PyramidVisionTransformer(BaseModule):
                 outs.append(x)
 
         return outs
-
-
-# @BACKBONES.register_module()
-# class PyramidVisionTransformerV2(PyramidVisionTransformer):
-#     """Implementation of `PVTv2: Improved Baselines with Pyramid Vision
-#     Transformer <https://arxiv.org/pdf/2106.13797.pdf>`_."""
-
-#     def __init__(self, **kwargs):
-#         super(PyramidVisionTransformerV2, self).__init__(
-#             patch_sizes=[7, 3, 3, 3],
-#             paddings=[3, 1, 1, 1],
-#             use_abs_pos_embed=False,
-#             norm_after_stage=True,
-#             use_conv_ffn=True,
-#             **kwargs)
 
 
 @BACKBONES.register_module()

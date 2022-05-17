@@ -56,7 +56,7 @@ def nchw_to_nlc(x):
         Tensor: The output tensor of shape [N, L, C] after conversion.
     """
     assert len(x.shape) == 4
-    return x.flatten(2).transpose(1, 2).contiguous()
+    return x.flatten(2).transpose(1, 2).contiguous()#从dim=2进行flatten,再交换1,2
 
 
 class AdaptivePadding(nn.Module):
