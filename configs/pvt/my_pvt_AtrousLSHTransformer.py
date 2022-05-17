@@ -13,8 +13,11 @@ model = dict(
         init_cfg=dict(checkpoint='/home/dl4/x/AtrousLSHTransformer/'
                      'checkpoints/retinanet_pvt-t_fpn_1x_coco_20210831_103110-17b566bd.pth')),
     neck=dict(in_channels=[64, 128, 320, 512]))
+
+    
 # optimizer
 optimizer = dict(_delete_=True, type='AdamW', lr=0.0001, weight_decay=0.0001)
+optimizer_config = dict(grad_clip=None)
 lr_config = dict(
     policy='step',
     warmup='linear',

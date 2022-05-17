@@ -414,10 +414,10 @@ class PyramidVisionTransformer(BaseModule):
                  num_stages=4,
                  num_layers=[3, 4, 6, 3],
                  num_heads=[1, 2, 5, 8],
-                 patch_sizes=[4, 2, 2, 2],
+                 patch_sizes=[4, 2, 2, 2], #
                  strides=[4, 2, 2, 2], ##注意此处
-                 paddings=[0, 0, 0, 0],
-                 sr_ratios=[8, 4, 2, 1],
+                 paddings=[0, 0, 0, 0],#
+                 sr_ratios=[8, 4, 2, 1], #
                  out_indices=(0, 1, 2, 3),
                  mlp_ratios=[8, 8, 4, 4],  
                  qkv_bias=True,
@@ -583,9 +583,12 @@ class PVT_AtrousLSHTransformer(PyramidVisionTransformer):
 
     def __init__(self, **kwargs):
         super(PVT_AtrousLSHTransformer, self).__init__(
-            patch_sizes=[7, 3, 3, 3],
-            paddings=[3, 1, 1, 1],
-            use_abs_pos_embed=False,
-            norm_after_stage=True,
-            use_conv_ffn=True,
+            #重写参数,此时是PVT v1
+            patch_sizes=[4, 2, 2, 2], 
+            strides=[4, 2, 2, 2], 
+            paddings=[0, 0, 0, 0],  
+            sr_ratios=[8, 4, 2, 1],
+            use_abs_pos_embed=True,
+            norm_after_stage=False, 
+            use_conv_ffn=False, 
             **kwargs)
