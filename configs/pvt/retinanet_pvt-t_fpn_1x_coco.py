@@ -21,6 +21,6 @@ model = dict(
         num_layers=[2, 2, 2, 2],
         init_cfg=dict(checkpoint='/home/dl4/x/AtrousLSHTransformer/'
                                                         'checkpoints/pvt_tiny.pth')),
-    neck=dict(in_channels=[64, 128, 320, 512]))
+    neck=dict(in_channels=[64, 128, 320, 512])) 
 # optimizer
 optimizer = dict(_delete_=True, type='AdamW', lr=0.0001, weight_decay=0.0001)

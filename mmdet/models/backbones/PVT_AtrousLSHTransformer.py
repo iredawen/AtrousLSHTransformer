@@ -298,7 +298,11 @@ class AbsolutePositionEmbedding(BaseModule):
             Default: 0.0.
     """
 
-    def __init__(self, pos_shape, pos_dim, drop_rate=0., init_cfg=None):
+    def __init__(self, 
+                            pos_shape, 
+                            pos_dim, 
+                            drop_rate=0., 
+                            init_cfg=None):
         super().__init__(init_cfg=init_cfg)
 
         if isinstance(pos_shape, int): #检查pose_shape是否为int类型
@@ -412,7 +416,7 @@ class PyramidVisionTransformer(BaseModule):
                  in_channels=3,
                  embed_dims=64,
                  num_stages=4,
-                 num_layers=[3, 4, 6, 3],
+                 num_layers=[3, 4, 6, 3],  #用的是small版本
                  num_heads=[1, 2, 5, 8],
                  patch_sizes=[4, 2, 2, 2], #
                  strides=[4, 2, 2, 2], ##注意此处
@@ -583,11 +587,18 @@ class PVT_AtrousLSHTransformer(PyramidVisionTransformer):
 
     def __init__(self, **kwargs):
         super(PVT_AtrousLSHTransformer, self).__init__(
-            #重写参数,此时是PVT v1
-            patch_sizes=[4, 2, 2, 2], 
-            strides=[4, 2, 2, 2], 
-            paddings=[0, 0, 0, 0],  
-            sr_ratios=[8, 4, 2, 1],
+            #重写参数,此时是PVT v1 (tiny)
+            num_layers=[2, 2, 2, 2],  #用的是small版本
+            num_heads=[1, 2, 5, 8],  #头数
+            #patch_sizes=[4, 2, 2, 2], #Original
+            patch_sizes=[4, 4, 4, 4],
+            #strides=[4, 2, 2, 2], #Original
+            strides=[4, 4, 4, 4], 
+            paddings=[0, 0, 0, 0],#
+            #sr_ratios=[8, 4, 2, 1], #Original
+            sr_ratios=[1, 1, 1, 1],  #不进行空间缩减注意力
+            out_indices=(0, 1, 2, 3),
+            mlp_ratios=[8, 8, 4, 4],  
             use_abs_pos_embed=True,
             norm_after_stage=False, 
             use_conv_ffn=False, 
