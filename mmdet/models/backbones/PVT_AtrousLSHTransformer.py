@@ -387,6 +387,7 @@ class PyramidVisionTransformer(BaseModule):
             Default: (0, 1, 2, 3).
         mlp_ratios (Sequence[int]): The ratio of the mlp hidden dim to the
             embedding dim of each transformer encode layer.
+            多层感知机隐藏层的维度与输入的嵌入特征维度之比
             Default: [8, 8, 4, 4].
         qkv_bias (bool): Enable bias for qkv if True. Default: True.
         drop_rate (float): Probability of an element to be zeroed.
@@ -482,25 +483,53 @@ class PyramidVisionTransformer(BaseModule):
 
         cur = 0
         self.layers = ModuleList()
-        for i, num_layer in enumerate(num_layers): #enumrate 枚举索引和值
-            embed_dims_i = embed_dims * num_heads[i]
-            patch_embed = PatchEmbed(
+        
+        embed_dims_i = embed_dims * num_heads[0]
+        patch_embed = PatchEmbed(
                 in_channels=in_channels,
                 embed_dims=embed_dims_i,
-                kernel_size=patch_sizes[i],
-                stride=strides[i],
-                padding=paddings[i],
+                kernel_size=patch_sizes[0],
+                stride=strides[0],
+                padding=paddings[0],
                 bias=True,
                 norm_cfg=norm_cfg)
+        self.layers.append(ModuleList(patch_embed))
 
-            layers = ModuleList()
-            if use_abs_pos_embed:
-                pos_shape = pretrain_img_size // np.prod(patch_sizes[:i + 1])
+        if use_abs_pos_embed:
+                #pos_shape = pretrain_img_size // np.prod(patch_sizes[:i + 1])
+                pos_shape = pretrain_img_size // np.prod(patch_sizes[:0 + 1])
                 pos_embed = AbsolutePositionEmbedding(
                     pos_shape=pos_shape,
                     pos_dim=embed_dims_i,
                     drop_rate=drop_rate)
-                layers.append(pos_embed)
+                self.layers.append(pos_embed)
+        
+        for i, num_layer in enumerate(num_layers): #enumrate 枚举索引和值
+            embed_dims_i = embed_dims * num_heads[i]
+            """
+            # #通过PatchEmbeding实现了图片尺寸的减小1/4-->1/2-->1/2-->1/2
+            # patch_embed = PatchEmbed(
+            #     in_channels=in_channels,
+            #     embed_dims=embed_dims_i,
+            #     kernel_size=patch_sizes[i],
+            #     stride=strides[i],
+            #     padding=paddings[i],
+            #     bias=True,
+            #     norm_cfg=norm_cfg)
+            """
+            print(patch_embed)
+
+            layers = ModuleList()
+            """
+            # if use_abs_pos_embed:
+            #     #pos_shape = pretrain_img_size // np.prod(patch_sizes[:i + 1])
+            #     pos_shape = pretrain_img_size // np.prod(patch_sizes[:0 + 1])
+            #     pos_embed = AbsolutePositionEmbedding(
+            #         pos_shape=pos_shape,
+            #         pos_dim=embed_dims_i,
+            #         drop_rate=drop_rate)
+            #     layers.append(pos_embed)
+            """
             layers.extend([
                 PVTEncoderLayer(
                     embed_dims=embed_dims_i,
@@ -521,7 +550,8 @@ class PyramidVisionTransformer(BaseModule):
                 norm = build_norm_layer(norm_cfg, embed_dims_i)[1]
             else:
                 norm = nn.Identity()
-            self.layers.append(ModuleList([patch_embed, layers, norm]))
+            #self.layers.append(ModuleList([patch_embed, layers, norm]))
+            self.layers.append(ModuleList([layers, norm]))
             cur += num_layer  #总层数
 
     def init_weights(self):
@@ -591,10 +621,10 @@ class PVT_AtrousLSHTransformer(PyramidVisionTransformer):
             num_layers=[2, 2, 2, 2],  #用的是small版本
             num_heads=[1, 2, 5, 8],  #头数
             #patch_sizes=[4, 2, 2, 2], #Original
-            patch_sizes=[4, 4, 4, 4],
+            patch_sizes=[5, 5, 5, 5],
             #strides=[4, 2, 2, 2], #Original
-            strides=[4, 4, 4, 4], 
-            paddings=[0, 0, 0, 0],#
+            strides=[1, 1, 1, 1], 
+            paddings=[2, 2, 2, 2],#
             #sr_ratios=[8, 4, 2, 1], #Original
             sr_ratios=[1, 1, 1, 1],  #不进行空间缩减注意力
             out_indices=(0, 1, 2, 3),
@@ -603,3 +633,7 @@ class PVT_AtrousLSHTransformer(PyramidVisionTransformer):
             norm_after_stage=False, 
             use_conv_ffn=False, 
             **kwargs)
+
+
+# if __name__ == "main":
+#     model=PVT_AtrousLSHTransformer()
