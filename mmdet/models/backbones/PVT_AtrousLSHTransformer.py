@@ -621,8 +621,8 @@ class PVT_AtrousLSHTransformer(PyramidVisionTransformer):
             #patch_sizes=[4, 2, 2, 2], #Original
             patch_sizes=[5, 5, 5, 5],
             #strides=[4, 2, 2, 2], #Original
-            strides=[1, 1, 1, 1], 
-            paddings=[2, 2, 2, 2],#
+            strides=[5, 5, 5, 5], 
+            paddings=[0, 0, 0, 0],#
             #sr_ratios=[8, 4, 2, 1], #Original
             sr_ratios=[1, 1, 1, 1],  #不进行空间缩减注意力
             out_indices=(0, 1, 2, 3),
