@@ -619,9 +619,9 @@ class PVT_AtrousLSHTransformer(PyramidVisionTransformer):
             num_layers=[2, 2, 2, 2],  #用的是small版本
             num_heads=[1, 2, 5, 8],  #头数
             #patch_sizes=[4, 2, 2, 2], #Original
-            patch_sizes=[5, 5, 5, 5],
+            patch_sizes=[4, 4, 4, 4],
             #strides=[4, 2, 2, 2], #Original
-            strides=[5, 5, 5, 5], 
+            strides=[4, 4, 4, 4], 
             paddings=[0, 0, 0, 0],#
             #sr_ratios=[8, 4, 2, 1], #Original
             sr_ratios=[1, 1, 1, 1],  #不进行空间缩减注意力
