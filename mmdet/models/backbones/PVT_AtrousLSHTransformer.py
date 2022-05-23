@@ -283,6 +283,7 @@ class PVTEncoderLayer(BaseModule):
 
     def forward(self, x, hw_shape):
         x = self.attn(self.norm1(x), hw_shape, identity=x)
+        # print("x.size",x.size() )
         x = self.ffn(self.norm2(x), hw_shape, identity=x)
 
         return x
@@ -357,7 +358,7 @@ class AbsolutePositionEmbedding(BaseModule):
         return self.drop(x + pos_embed)
 
 
-class PyramidVisionTransformer(BaseModule):
+class PyramidVisionTransformer_change(BaseModule):
     """Pyramid Vision Transformer (PVT)
 
     Implementation of `Pyramid Vision Transformer: A Versatile Backbone for
@@ -466,6 +467,7 @@ class PyramidVisionTransformer(BaseModule):
         self.num_heads = num_heads
         self.patch_sizes = patch_sizes
         self.strides = strides
+        self.use_abs_pos_embed=use_abs_pos_embed
         self.sr_ratios = sr_ratios
         assert num_stages == len(num_layers) == len(num_heads) \
                == len(patch_sizes) == len(strides) == len(sr_ratios)
@@ -481,30 +483,33 @@ class PyramidVisionTransformer(BaseModule):
         ]  # stochastic num_layer decay rule
 
         cur = 0
-        self.layers = ModuleList()
+        self.layers = ModuleList()  #Network
         
-        embed_dims_i = embed_dims * num_heads[0]
-        patch_embed = PatchEmbed(
+        #embed_dims_i = embed_dims * num_heads[0]
+        self.patch_embed = PatchEmbed(
                 in_channels=in_channels,
-                embed_dims=embed_dims_i,
+                #embed_dims=embed_dims_i,
+                embed_dims=embed_dims * num_heads[0],
                 kernel_size=patch_sizes[0],
                 stride=strides[0],
                 padding=paddings[0],
                 bias=True,
                 norm_cfg=norm_cfg)
-        self.layers.append(ModuleList(patch_embed))
+        #self.layers.append(patch_embed)  # 0
 
         if use_abs_pos_embed:
                 #pos_shape = pretrain_img_size // np.prod(patch_sizes[:i + 1])
                 pos_shape = pretrain_img_size // np.prod(patch_sizes[:0 + 1])
-                pos_embed = AbsolutePositionEmbedding(
+                self.pos_embed = AbsolutePositionEmbedding(
                     pos_shape=pos_shape,
-                    pos_dim=embed_dims_i,
+                    #pos_dim=embed_dims_i,
+                    pos_dim=embed_dims * num_heads[0],
                     drop_rate=drop_rate)
-                self.layers.append(pos_embed)
+                #self.layers.append(pos_embed) # 1
         
         for i, num_layer in enumerate(num_layers): #enumrate 枚举索引和值 num=4
             embed_dims_i = embed_dims * num_heads[i]
+            proj=nn.Linear(in_features=in_channels,out_features=embed_dims_i)
             """
             # #通过PatchEmbeding实现了图片尺寸的减小1/4-->1/2-->1/2-->1/2
             # patch_embed = PatchEmbed(
@@ -516,9 +521,8 @@ class PyramidVisionTransformer(BaseModule):
             #     bias=True,
             #     norm_cfg=norm_cfg)
             """
-            print(patch_embed)
 
-            layers = ModuleList()
+            layers = ModuleList()  #stage
             """
             # if use_abs_pos_embed:
             #     #pos_shape = pretrain_img_size // np.prod(patch_sizes[:i + 1])
@@ -529,6 +533,8 @@ class PyramidVisionTransformer(BaseModule):
             #         drop_rate=drop_rate)
             #     layers.append(pos_embed)
             """
+            if i<1:
+                layers.append(proj)
             layers.extend([
                 PVTEncoderLayer(
                     embed_dims=embed_dims_i,
@@ -544,15 +550,18 @@ class PyramidVisionTransformer(BaseModule):
                     use_conv_ffn=use_conv_ffn) for idx in range(num_layer) #num=num_layer[i]
             ])
             in_channels = embed_dims_i #下一循环的输入
+            print("in_channels", in_channels)
             # The ret[0] of build_norm_layer is norm name.
             if norm_after_stage:
                 norm = build_norm_layer(norm_cfg, embed_dims_i)[1]
             else:
                 norm = nn.Identity()
             #self.layers.append(ModuleList([patch_embed, layers, norm]))
-            self.layers.append(ModuleList([layers, norm]))
+            self.layers.append(ModuleList([layers, norm]))  #stage+norm
+            
             cur += num_layer  #总层数
-
+            
+        
     def init_weights(self):
         logger = get_root_logger()
         if self.init_cfg is None:
@@ -594,30 +603,44 @@ class PyramidVisionTransformer(BaseModule):
             load_state_dict(self, state_dict, strict=False, logger=logger)
 
     def forward(self, x):
+        x, hw_shape = self.patch_embed(x)
+        print("patch",x.size())
+        print("hw_shape", hw_shape)
+        if self.use_abs_pos_embed:
+            x = self.pos_embed(x, hw_shape)
+            
         outs = []
 
         for i, layer in enumerate(self.layers):
-            x, hw_shape = layer[0](x)
-
-            for block in layer[1]:
+            for block in layer[0]:
+                print("pos,lay1,lay2",x.size())
                 x = block(x, hw_shape)
-            x = layer[2](x)
-            x = nlc_to_nchw(x, hw_shape)
+            x = layer[1](x)
+            #x = nlc_to_nchw(x, hw_shape)
             if i in self.out_indices:
                 outs.append(x)
+
+            # x, hw_shape = layer[0](x)
+
+            # for block in layer[1]:
+            #     x = block(x, hw_shape)
+            # x = layer[2](x)
+            # x = nlc_to_nchw(x, hw_shape)
+            # if i in self.out_indices:
+            #     outs.append(x)
 
         return outs
 
 
 @BACKBONES.register_module()
-class PVT_AtrousLSHTransformer(PyramidVisionTransformer):
+class PVT_AtrousLSHTransformer(PyramidVisionTransformer_change):
     """Implementation of PVT_AtrousLSHTransformer"""
 
     def __init__(self, **kwargs):
         super(PVT_AtrousLSHTransformer, self).__init__(
             #重写参数,此时是PVT v1 (tiny)
             num_layers=[2, 2, 2, 2],  #用的是small版本
-            num_heads=[1, 2, 5, 8],  #头数
+            num_heads=[1, 1, 1, 1],  #头数
             #patch_sizes=[4, 2, 2, 2], #Original
             patch_sizes=[4, 4, 4, 4],
             #strides=[4, 2, 2, 2], #Original
@@ -632,6 +655,3 @@ class PVT_AtrousLSHTransformer(PyramidVisionTransformer):
             use_conv_ffn=False, 
             **kwargs)
 
-
-# if __name__ == "main":
-#     model=PVT_AtrousLSHTransformer()

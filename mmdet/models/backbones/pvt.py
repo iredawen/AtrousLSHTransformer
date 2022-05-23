@@ -564,11 +564,14 @@ class PyramidVisionTransformer(BaseModule):
         outs = []
 
         for i, layer in enumerate(self.layers):
-            x, hw_shape = layer[0](x)
-
-            for block in layer[1]:
+            x, hw_shape = layer[0](x)  #patch
+            print("patch",x.size())
+            print("hw_shape", hw_shape)
+            for block in layer[1]:   #layers
                 x = block(x, hw_shape)
-            x = layer[2](x)
+                print("pos,lay1,lay2",x.size())
+            x = layer[2](x)  # norm
+
             x = nlc_to_nchw(x, hw_shape)
             if i in self.out_indices:
                 outs.append(x)
