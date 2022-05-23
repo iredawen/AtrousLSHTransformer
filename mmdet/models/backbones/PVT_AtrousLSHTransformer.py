@@ -503,7 +503,7 @@ class PyramidVisionTransformer(BaseModule):
                     drop_rate=drop_rate)
                 self.layers.append(pos_embed)
         
-        for i, num_layer in enumerate(num_layers): #enumrate 枚举索引和值
+        for i, num_layer in enumerate(num_layers): #enumrate 枚举索引和值 num=4
             embed_dims_i = embed_dims * num_heads[i]
             """
             # #通过PatchEmbeding实现了图片尺寸的减小1/4-->1/2-->1/2-->1/2
@@ -541,7 +541,7 @@ class PyramidVisionTransformer(BaseModule):
                     act_cfg=act_cfg,
                     norm_cfg=norm_cfg,
                     sr_ratio=sr_ratios[i],
-                    use_conv_ffn=use_conv_ffn) for idx in range(num_layer)
+                    use_conv_ffn=use_conv_ffn) for idx in range(num_layer) #num=num_layer[i]
             ])
             in_channels = embed_dims_i #下一循环的输入
             # The ret[0] of build_norm_layer is norm name.

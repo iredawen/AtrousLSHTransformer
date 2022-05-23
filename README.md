@@ -35,3 +35,20 @@
 
                 * 修改结构
                 * 检测
+
+
+###  *2022 0519*
+                * 修改无空间缩减注意力
+
+
+###  *2022 0521*
+                * 修改图像尺寸,尽在最开始进行图片的嵌入和位置的嵌入
+
+
+###  *2022 0523*
+                * 原始网络的情况:
+                        PVT: [ [patch, pos_embed, PVTEncoder, norm], [patch, pos_embed, PVTEncoder, norm], [patch, pos_embed, PVTEncoder, norm], [patch, pos_embed, PVTEncoder, norm] ]
+                * 目前网络的情况:
+                         patchSize大小为5,Stride大小为5,保证不重叠的进行图片嵌入;
+                         图片的特征和位置嵌入只在输入网络前进行一次;
+                        Atrous: [ patch, pos_embed, [PVT, norm], [PVT, norm], [PVT, norm], [PVT, norm] ]
