@@ -14,7 +14,7 @@
 
 
 ###  *2022 0513*
-                * 证明Mem可以通过修改Coco_detection.py文件实现图片尺寸(448*448),线程(2)和Batchsize(2)进行修改;
+                * 证明Mem可以通过修改Coco_detection.py文件实现图片尺寸(448*448),线程(2)和Batchsize(2)进行修改(也许这样一来,原本不能使用的模型就能用了.); 
                 * 测试PVT模型是否能在coco数据集上训练的预训练模型上微调(./trainpy);
                 * 将PVT_AtrousLSHTransformer的框架注册到MMdetection,之后用于修改;
                         涉及的文件: 

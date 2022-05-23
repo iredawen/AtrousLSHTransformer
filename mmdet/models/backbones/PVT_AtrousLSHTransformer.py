@@ -357,7 +357,6 @@ class AbsolutePositionEmbedding(BaseModule):
         return self.drop(x + pos_embed)
 
 
-#@BACKBONES.register_module()
 class PyramidVisionTransformer(BaseModule):
     """Pyramid Vision Transformer (PVT)
 
@@ -612,8 +611,7 @@ class PyramidVisionTransformer(BaseModule):
 
 @BACKBONES.register_module()
 class PVT_AtrousLSHTransformer(PyramidVisionTransformer):
-    """Implementation of `PVTv2: Improved Baselines with Pyramid Vision
-    Transformer <https://arxiv.org/pdf/2106.13797.pdf>`_."""
+    """Implementation of PVT_AtrousLSHTransformer"""
 
     def __init__(self, **kwargs):
         super(PVT_AtrousLSHTransformer, self).__init__(
