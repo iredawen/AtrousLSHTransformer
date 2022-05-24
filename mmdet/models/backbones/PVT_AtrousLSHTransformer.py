@@ -485,32 +485,32 @@ class PyramidVisionTransformer_change(BaseModule):
         cur = 0
         self.layers = ModuleList()  #Network
         
-        #embed_dims_i = embed_dims * num_heads[0]
-        self.patch_embed = PatchEmbed(
-                in_channels=in_channels,
-                #embed_dims=embed_dims_i,
-                embed_dims=embed_dims * num_heads[0],
-                kernel_size=patch_sizes[0],
-                stride=strides[0],
-                padding=paddings[0],
-                bias=True,
-                norm_cfg=norm_cfg)
-        #self.layers.append(patch_embed)  # 0
+        # #embed_dims_i = embed_dims * num_heads[0]
+        # self.patch_embed = PatchEmbed(
+        #         in_channels=in_channels,
+        #         #embed_dims=embed_dims_i,
+        #         embed_dims=embed_dims * num_heads[0],
+        #         kernel_size=patch_sizes[0],
+        #         stride=strides[0],
+        #         padding=paddings[0],
+        #         bias=True,
+        #         norm_cfg=norm_cfg)
+        # #self.layers.append(patch_embed)  # 0
 
-        if use_abs_pos_embed:
-                #pos_shape = pretrain_img_size // np.prod(patch_sizes[:i + 1])
-                pos_shape = pretrain_img_size // np.prod(patch_sizes[:0 + 1])
-                self.pos_embed = AbsolutePositionEmbedding(
-                    pos_shape=pos_shape,
-                    #pos_dim=embed_dims_i,
-                    pos_dim=embed_dims * num_heads[0],
-                    drop_rate=drop_rate)
-                #self.layers.append(pos_embed) # 1
+        # if use_abs_pos_embed:
+        #         #pos_shape = pretrain_img_size // np.prod(patch_sizes[:i + 1])
+        #         pos_shape = pretrain_img_size // np.prod(patch_sizes[:0 + 1])
+        #         self.pos_embed = AbsolutePositionEmbedding(
+        #             pos_shape=pos_shape,
+        #             #pos_dim=embed_dims_i,
+        #             pos_dim=embed_dims * num_heads[0],
+        #             drop_rate=drop_rate)
+
         
         for i, num_layer in enumerate(num_layers): #enumrate 枚举索引和值 num=4
             embed_dims_i = embed_dims * num_heads[i]
             proj=nn.Linear(in_features=in_channels,out_features=embed_dims_i)
-            """
+
             # #通过PatchEmbeding实现了图片尺寸的减小1/4-->1/2-->1/2-->1/2
             # patch_embed = PatchEmbed(
             #     in_channels=in_channels,
@@ -520,21 +520,48 @@ class PyramidVisionTransformer_change(BaseModule):
             #     padding=paddings[i],
             #     bias=True,
             #     norm_cfg=norm_cfg)
-            """
-
-            layers = ModuleList()  #stage
-            """
             # if use_abs_pos_embed:
-            #     #pos_shape = pretrain_img_size // np.prod(patch_sizes[:i + 1])
-            #     pos_shape = pretrain_img_size // np.prod(patch_sizes[:0 + 1])
+            #     pos_shape = pretrain_img_size // np.prod(patch_sizes[:i + 1])
             #     pos_embed = AbsolutePositionEmbedding(
             #         pos_shape=pos_shape,
             #         pos_dim=embed_dims_i,
             #         drop_rate=drop_rate)
             #     layers.append(pos_embed)
-            """
+
+            patch_embed = PatchEmbed(
+                in_channels=in_channels,
+                embed_dims=embed_dims * num_heads[0],
+                kernel_size=patch_sizes[0],
+                stride=strides[0],
+                padding=paddings[0],
+                bias=True,
+                norm_cfg=norm_cfg)
+                        
+            layer_before=ModuleList()
+            layers = ModuleList()  #stage
+            
+            # if use_abs_pos_embed:
+            #     #pos_shape = pretrain_img_size // np.prod(patch_sizes[:i + 1])
+            #     pos_shape = pretrain_img_size // np.prod(patch_sizes[:0 + 1])
+            #     pos_embed = AbsolutePositionEmbedding(
+            #         pos_shape=pos_shape,
+            #         #pos_dim=embed_dims_i,
+            #         pos_dim=embed_dims * num_heads[0],
+            #         drop_rate=drop_rate)
+            #     # layers.append(pos_embed)
+            
             if i<1:
-                layers.append(proj)
+                layer_before.append(patch_embed)
+                if use_abs_pos_embed:
+                    pos_shape = pretrain_img_size // np.prod(patch_sizes[:0 + 1])
+                    pos_embed = AbsolutePositionEmbedding(
+                        pos_shape=pos_shape,
+                        pos_dim=embed_dims * num_heads[0],
+                        drop_rate=drop_rate)
+                    layer_before.append(pos_embed)
+            else :
+                layer_before.append(proj)
+
             layers.extend([
                 PVTEncoderLayer(
                     embed_dims=embed_dims_i,
@@ -550,14 +577,14 @@ class PyramidVisionTransformer_change(BaseModule):
                     use_conv_ffn=use_conv_ffn) for idx in range(num_layer) #num=num_layer[i]
             ])
             in_channels = embed_dims_i #下一循环的输入
-            print("in_channels", in_channels)
+
             # The ret[0] of build_norm_layer is norm name.
             if norm_after_stage:
                 norm = build_norm_layer(norm_cfg, embed_dims_i)[1]
             else:
                 norm = nn.Identity()
             #self.layers.append(ModuleList([patch_embed, layers, norm]))
-            self.layers.append(ModuleList([layers, norm]))  #stage+norm
+            self.layers.append(ModuleList([layer_before, layers, norm]))  #stage+norm
             
             cur += num_layer  #总层数
             
@@ -603,22 +630,46 @@ class PyramidVisionTransformer_change(BaseModule):
             load_state_dict(self, state_dict, strict=False, logger=logger)
 
     def forward(self, x):
-        x, hw_shape = self.patch_embed(x)
-        print("patch",x.size())
-        print("hw_shape", hw_shape)
-        if self.use_abs_pos_embed:
-            x = self.pos_embed(x, hw_shape)
+        # x, hw_shape = self.patch_embed(x)
+        # print("patch",x.size())
+        # print("hw_shape", hw_shape)
+        # if self.use_abs_pos_embed:
+        #     x = self.pos_embed(x, hw_shape)
             
         outs = []
-
-        for i, layer in enumerate(self.layers):
+        outs_in=[]
+        layer_befor_j=0
+        for i, layer in enumerate(self.layers): #4个stage
             for block in layer[0]:
-                print("pos,lay1,lay2",x.size())
+                if i==0:
+                    if layer_befor_j<1: #patch
+                        x, hw_shape = block(x)
+                        layer_befor_j=layer_befor_j+1
+                        print("x, hw_shape",x.size())
+                    else: #pos_embed
+                        x = block(x, hw_shape)
+                    print("1stage-layer0")
+                else:
+                    print("2-4stage-layer0")
+                    x = block(x) #linear
+            
+            for block in layer[1]: #layers
+                print("layers")
                 x = block(x, hw_shape)
-            x = layer[1](x)
-            #x = nlc_to_nchw(x, hw_shape)
+
+            x = layer[2](x) #norm
+            print("norm")
+
+            # if i in self.out_indices:
+            #     outs.append(x)
+
+            x_in = nlc_to_nchw(x, hw_shape)
             if i in self.out_indices:
-                outs.append(x)
+                print("out")
+                outs_in.append(x_in)
+                print(x_in.size())
+                print(len(outs_in))
+
 
             # x, hw_shape = layer[0](x)
 
@@ -629,7 +680,7 @@ class PyramidVisionTransformer_change(BaseModule):
             # if i in self.out_indices:
             #     outs.append(x)
 
-        return outs
+        return outs_in
 
 
 @BACKBONES.register_module()

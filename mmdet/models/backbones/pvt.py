@@ -575,6 +575,8 @@ class PyramidVisionTransformer(BaseModule):
             x = nlc_to_nchw(x, hw_shape)
             if i in self.out_indices:
                 outs.append(x)
+                print(x.size())
+                print(len(outs))
 
         return outs
 
