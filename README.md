@@ -57,3 +57,8 @@
                             [[linear], [[layer1,layer2], norm]], 
                             [[linear], [[layer1,layer2], norm]], 
                             [[linear], [[layer1,layer2], norm]] ]
+
+
+###  *2022 0524*
+                * 目前网络的特征图尺寸不变,PatchSize不变.
+                * 下一步:检查各环节是否存在问题,计划将注意力进行修改(可以参考利用膨胀卷积的部分)
