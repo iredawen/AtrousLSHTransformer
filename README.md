@@ -79,3 +79,8 @@
 
 ###  *2022 0530*
                 * 测试修改的无特征金字塔和空间缩减注意力的代码,并训练之.
+                * 查找Atrous self attention相关代码实现
+                [Generating Long Sequences with Sparse Transformers](https://paperswithcode.com/paper/190410509)
+                [VideoGPT](https://github.com/wilson1yan/VideoGPT/blob/master/videogpt/attention.py)
+                [torch-blocksparse](https://github.com/ptillet/torch-blocksparse/blob/master/torch_blocksparse/deepspeedsparseselfattention.py)
+                [Keras-attention](https://github.com/bojone/attention/blob/master/attention_keras.py)
