@@ -82,8 +82,9 @@
                 * 查找Atrous self attention相关代码实现
                 
 [Generating Long Sequences with Sparse Transformers](https://paperswithcode.com/paper/190410509)
-                [VideoGPT](https://github.com/wilson1yan/VideoGPT/blob/master/videogpt/attention.py)
-                [torch-blocksparse](https://github.com/ptillet/torch-blocksparse/blob/master/torch_blocksparse/deepspeedsparseselfattention.py)
-                [Keras-attention](https://github.com/bojone/attention/blob/master/attention_keras.py)
+
+[VideoGPT](https://github.com/wilson1yan/VideoGPT/blob/master/videogpt/attention.py)
+[torch-blocksparse](https://github.com/ptillet/torch-blocksparse/blob/master/torch_blocksparse/deepspeedsparseselfattention.py)
+[Keras-attention](https://github.com/bojone/attention/blob/master/attention_keras.py)
 
 
