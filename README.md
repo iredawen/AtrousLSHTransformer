@@ -89,4 +89,54 @@
 
 [Keras-attention](https://github.com/bojone/attention/blob/master/attention_keras.py)
 
+[VideoGPT](https://github.com/wilson1yan/VideoGPT/blob/master/videogpt/attention.py)
 
+[torch-blocksparse](https://github.com/ptillet/torch-blocksparse/blob/master/torch_blocksparse/deepspeedsparseselfattention.py)
+
+[Keras-attention](https://github.com/bojone/attention/blob/master/attention_keras.py)
+
+
+###  *2022 0617*
+                * workdir/my_pvt_AtrousLSHTrasnformer
+                        此文件是不采用空间缩减注意力(即采用全注意力)的非FPN架构pvt v1模型;
+                        训练了12epoch
+                        [需要对其实验结果进行测试,测试在COCO下的map,IOU,fps,flops等;最好实现Attention的可视化.]
+                * workdir/retinanet_pvt-t_fpn_1x_coc
+                        此文件是基准pvt v1训练后的结果,同样需要进行测试与验证,作为对照组.
+
+
+###  *2022 0618*
+                *测试workdir/my_pvt_AtrousLSHTrasnformer和workdir/retinanet_pvt-t_fpn_1x_coc的实验数据;
+                *设置软链接,链接VOC格式的自定义数据集.
+
+
+###  *2022 0618*
+                *终端输出的东西在mmdet/datasets/pipline/loading.py下改.
+
+
+###  *2022 0621*
+                *制作自定义的数据集,训练之
+
+
+###  *2022 0622*
+                *测试结果:workdir/my_pvt_AtrousLSHTrasnformer_voc和workdir/retinanet_pvt-t_fpn_1x_coc_voc的实验数据;
+                *重新测试workdir/my_pvt_AtrousLSHTrasnformer和workdir/retinanet_pvt-t_fpn_1x_coc的图像实验数据.
+                [制定GPU] python tools/test.py [config] [weights] --out [save_dir, 必须制定文件格式哦,写为xxx/results.pkl] --show [show_images] --show-dir [image_save_dir]
+
+                eg: CUDA_VISIBLE_DEVICES="2" python tools/test.py work_dirs/retinanet_pvt-t_fpn_1x_coco/retinanet_pvt-t_fpn_1x_coco.py work_dirs/retinanet_pvt-t_fpn_1x_coco/epoch_12.pth --out results/retinanet_pvt-t_fpn_1x_coco/results.pkl --show-dir results/retinanet_pvt-t_fpn_1x_coco
+
+
+###  *2022 0623*
+                *目标:画出自定义数据集的融合矩阵,并遍历保存测试图片.
+                
+
+###  *2022 0625*
+                *整理查找Atrous self attention相关代码实现,梳理代码结构
+
+
+###  *2022 0630*
+                *完成代码梳理,参考VideoGPT进行代码修改,使用其设计的稀疏注意力
+
+
+###  *2022 0712*
+                *

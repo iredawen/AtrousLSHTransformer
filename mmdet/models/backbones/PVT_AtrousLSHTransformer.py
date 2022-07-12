@@ -645,30 +645,30 @@ class PyramidVisionTransformer_change(BaseModule):
                     if layer_befor_j<1: #patch
                         x, hw_shape = block(x)
                         layer_befor_j=layer_befor_j+1
-                        print("x, hw_shape",x.size())
+                        #print("x, hw_shape",x.size())
                     else: #pos_embed
                         x = block(x, hw_shape)
-                    print("1stage-layer0")
+                    #print("1stage-layer0")
                 else:
-                    print("2-4stage-layer0")
+                    #print("2-4stage-layer0")
                     x = block(x) #linear
             
             for block in layer[1]: #layers
-                print("layers")
+                #print("layers")
                 x = block(x, hw_shape)
 
             x = layer[2](x) #norm
-            print("norm")
+            #print("norm")
 
             # if i in self.out_indices:
             #     outs.append(x)
 
             x_in = nlc_to_nchw(x, hw_shape)
             if i in self.out_indices:
-                print("out")
+                #print("out")
                 outs_in.append(x_in)
-                print(x_in.size())
-                print(len(outs_in))
+                #print(x_in.size())
+                #print(len(outs_in))
 
 
             # x, hw_shape = layer[0](x)

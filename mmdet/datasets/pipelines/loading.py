@@ -71,9 +71,11 @@ class LoadImageFromFile:
             img = img.astype(np.float32)
 
         results['filename'] = filename
+        print("filename",filename)
         results['ori_filename'] = results['img_info']['filename']
         results['img'] = img
         results['img_shape'] = img.shape
+        print("img_shape",img.shape)
         results['ori_shape'] = img.shape
         results['img_fields'] = ['img']
         return results

@@ -172,19 +172,19 @@ def plot_confusion_matrix(confusion_matrix,
     im = ax.imshow(confusion_matrix, cmap=cmap)
     plt.colorbar(mappable=im, ax=ax)
 
-    title_font = {'weight': 'bold', 'size': 12}
+    title_font = {'weight': 'bold', 'size': 5}
     ax.set_title(title, fontdict=title_font)
-    label_font = {'size': 10}
+    label_font = {'size': 5}
     plt.ylabel('Ground Truth Label', fontdict=label_font)
     plt.xlabel('Prediction Label', fontdict=label_font)
 
     # draw locator
-    xmajor_locator = MultipleLocator(1)
-    xminor_locator = MultipleLocator(0.5)
+    xmajor_locator = MultipleLocator(100)
+    xminor_locator = MultipleLocator(15)
     ax.xaxis.set_major_locator(xmajor_locator)
     ax.xaxis.set_minor_locator(xminor_locator)
-    ymajor_locator = MultipleLocator(1)
-    yminor_locator = MultipleLocator(0.5)
+    ymajor_locator = MultipleLocator(100)
+    yminor_locator = MultipleLocator(15)
     ax.yaxis.set_major_locator(ymajor_locator)
     ax.yaxis.set_minor_locator(yminor_locator)
 
@@ -198,9 +198,9 @@ def plot_confusion_matrix(confusion_matrix,
     ax.set_yticklabels(labels)
 
     ax.tick_params(
-        axis='x', bottom=False, top=True, labelbottom=False, labeltop=True)
+        axis='both', bottom=False, top=True, labelsize=6,labelbottom=False, labeltop=True)
     plt.setp(
-        ax.get_xticklabels(), rotation=45, ha='left', rotation_mode='anchor')
+        ax.get_xticklabels(), rotation=45, ha='left', rotation_mode='anchor' )
 
     # draw confution matrix value
     for i in range(num_classes):
@@ -215,7 +215,7 @@ def plot_confusion_matrix(confusion_matrix,
                 ha='center',
                 va='center',
                 color='w',
-                size=7)
+                size=3)
 
     ax.set_ylim(len(confusion_matrix) - 0.5, -0.5)  # matplotlib>3.1.1
 

@@ -6,13 +6,18 @@ def wider_face_classes():
     return ['face']
 
 
+# def voc_classes():
+#     return [
+#         'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat',
+#         'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike', 'person',
+#         'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
+#     ]
+
+
 def voc_classes():
     return [
-        'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat',
-        'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike', 'person',
-        'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
+        'Shoes', 'Wire', 'Socks', 'Garbagecan'
     ]
-
 
 def imagenet_det_classes():
     return [

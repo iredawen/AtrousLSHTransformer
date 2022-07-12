@@ -39,7 +39,9 @@ class Compose:
 
         for t in self.transforms:
             data = t(data)
+            #print(data.get('img_info'))
             if data is None:
+                #print("there is a bad image.")
                 return None
         return data
 
