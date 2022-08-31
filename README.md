@@ -54,9 +54,9 @@
                         Atrous: [ patch, pos_embed, [PVT, norm], [PVT, norm], [PVT, norm], [PVT, norm] ]
                 * 计划修改网络:
                         [  [[patch, pos], [[layer1,layer2], norm]],  
-                            [[linear], [[layer1,layer2], norm]], 
-                            [[linear], [[layer1,layer2], norm]], 
-                            [[linear], [[layer1,layer2], norm]] ]
+                            [[reshape,linear], [[layer1,layer2], norm]], 
+                            [[reshape,linear], [[layer1,layer2], norm]], 
+                            [[reshape,linear], [[layer1,layer2], norm]] ]
 
 
 ###  *2022 0524*
@@ -139,4 +139,24 @@
 
 
 ###  *2022 0712*
-                *
+                *选择添加稀疏注意力机制
+
+###  *2022 0815*
+                在PVT_Atrous下进行修改,利用膨胀卷积降低参数量,并保证每一阶段都是FPN的合适输出.              
+                
+
+###  *2022 0829*
+                * 原始网络的情况:
+                        PVT: [ [patch, [pos_embed,layer1,layer2], norm],[patch, [pos_embed,layer1,layer2], norm],[patch, [pos_embed,layer1,layer2], norm], [patch, [pos_embed,layer1,layer2], norm], ]
+                
+                * 计划修改网络:
+                        [  [[patch, pos], [[layer1,layer2], norm]],  
+                            [[reshape,linear], [[layer1,layer2], norm]], 
+                            [[reshape,linear], [[layer1,layer2], norm]], 
+                            [[reshape,linear], [[layer1,layer2], norm]] ]
+                
+                存在问题:模型依旧不收敛,怀疑是没有进行位置嵌入或直接线性映射不可取.
+                从根源进行替换: 
+                        1.  恢复整体的网络结构PVT, 取消patchEmbed的步长和尺度,进行1*1conv(尝试),看看是否会收敛.
+
+                        2.  减少进入FPN的参数量,利用膨胀卷积进行构造,但保证骨干网络中计算的参数量不变.
