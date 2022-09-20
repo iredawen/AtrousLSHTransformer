@@ -354,7 +354,7 @@ class AbsolutePositionEmbedding(BaseModule):
 
 
 @BACKBONES.register_module()
-class PVT_try(BaseModule):
+class PVT_LSH(BaseModule):
     """Pyramid Vision Transformer (PVT)
 
     Implementation of `Pyramid Vision Transformer: A Versatile Backbone for
@@ -416,8 +416,9 @@ class PVT_try(BaseModule):
                  num_heads=[1, 2, 5, 8],
                  patch_sizes=[4, 2, 2, 2],
                  strides=[4, 2, 2, 2],
-                 paddings=[0, 0, 0, 0],
-                 sr_ratios=[1, 1, 1, 1],
+                 #paddings=[0, 0, 0, 0],
+                 paddings=[0, 'same', 'same', 'same'],
+                 sr_ratios=[8, 4, 2, 1],
                  out_indices=(0, 1, 2, 3),
                  mlp_ratios=[8, 8, 4, 4],
                  qkv_bias=True,

@@ -23,10 +23,10 @@ from mmdet.utils import (collect_env, get_device, get_root_logger,
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
-    # parser.add_argument('--config', default='/home/dl4/x/AtrousLSHTransformer/configs/pvt/'
-    #                     'my_pvt_AtrousLSHTransformer_voc.py')  #PVT_AtrousLSH
     parser.add_argument('--config', default='/home/dl4/x/AtrousLSHTransformer/configs/pvt/'
-                        'my_pvt_AtrousLSHTransformer_voc_same.py')  #pvt-try
+                        'my_pvt_AtrousLSHTransformer_voc.py')  #PVT_AtrousLSH
+    # parser.add_argument('--config', default='/home/dl4/x/AtrousLSHTransformer/configs/pvt/'
+    #                     'my_pvt_AtrousLSHTransformer_voc_same.py')  #pvt-try
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')

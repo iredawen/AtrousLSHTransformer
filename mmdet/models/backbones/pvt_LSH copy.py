@@ -353,8 +353,84 @@ class AbsolutePositionEmbedding(BaseModule):
         return self.drop(x + pos_embed)
 
 
+class DilationConvModule(nn.Module):
+    def __init__(self,
+                            in_channels,
+                            kernel_size=3,
+                            stride=1,
+                            padding=0,
+                            dilation_1=1,
+                            dilation_2=2,
+                            dilation_3=5):
+        super(DilationConvModule, self).__init__()
+
+        self.inchannels=in_channels
+        self.kernel_size=kernel_size
+        self.stride=stride
+        self.padding=padding
+        self.dilation_1=dilation_1
+        self.dilation_2=dilation_2
+        self.dilation_3=dilation_3
+
+        self.out_channels_1=in_channels*2
+        self.out_channels_2=in_channels*4
+        self.out_channels_3=in_channels
+
+        self.conv1=nn.Sequential(
+            nn.Conv2d(in_channels=in_channels, out_channels=self.out_channels_1,
+                                    kernel_size=self.kernel_size, stride=self.stride,
+                                    padding=self.padding, dilation=self.dilation_1),
+            nn.BatchNorm2d(self.out_channels_1),
+            nn.ReLU(inplace=True)
+        )
+        self.conv2=nn.Sequential(
+            nn.Conv2d(in_channels=in_channels*2, out_channels=self.out_channels_2,
+                                    kernel_size=self.kernel_size, stride=self.stride,
+                                    padding=self.padding, dilation=self.dilation_2),
+            nn.BatchNorm2d(self.out_channels_2),
+            nn.ReLU(inplace=True)
+        )
+        self.conv3=nn.Sequential(
+            nn.Conv2d(in_channels=in_channels*4, out_channels=self.out_channels_3,
+                                    kernel_size=self.kernel_size, stride=self.stride,
+                                    padding=self.padding, dilation=self.dilation_3),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True)
+        )
+
+        self.decent_1=nn.Conv2d(in_channels=self.out_channels_1, out_channels=self.inchannels,
+                                                    kernel_size=1, stride=self.stride,
+                                                    padding=self.padding, dilation=1)
+        self.decent_2=nn.Conv2d(in_channels=self.out_channels_2, out_channels=self.inchannels,
+                                                    kernel_size=1, stride=self.stride,
+                                                    padding=self.padding, dilation=1)
+       
+    
+    def forward(self, x): 
+        #Kernel size can't be greater than actual input size
+        if ((x.shape[2]>((self.kernel_size-1)*self.dilation_1+1)) and (x.shape[3]>((self.kernel_size-1)*self.dilation_1+1))): 
+            x=self.conv1(x)
+
+        if ((x.shape[2]>((self.kernel_size-1)*self.dilation_2+1)) and (x.shape[3]>((self.kernel_size-1)*self.dilation_2+1))): 
+            x=self.conv2(x)
+
+        if ((x.shape[2]>((self.kernel_size-1)*self.dilation_3+1)) and (x.shape[3]>((self.kernel_size-1)*self.dilation_3+1))):
+            x=self.conv3(x)
+        
+        if (x.shape[1]!=self.inchannels): #1x1 conv降维
+            print("1*1conv decent.")
+            if(x.shape[1]/self.inchannels==2):
+                x=self.decent_1(x)
+            elif(x.shape[1]==self.out_channels_2):
+                 x=self.decent_2(x)
+
+        print("***********************", x.shape[1])
+        out_size = (x.shape[2], x.shape[3])
+        return x, out_size
+
+
 @BACKBONES.register_module()
-class PVT_try(BaseModule):
+class PVT_LSH(BaseModule):
     """Pyramid Vision Transformer (PVT)
 
     Implementation of `Pyramid Vision Transformer: A Versatile Backbone for
@@ -414,12 +490,13 @@ class PVT_try(BaseModule):
                  num_stages=4,
                  num_layers=[3, 4, 6, 3],
                  num_heads=[1, 2, 5, 8],
-                 patch_sizes=[4, 2, 2, 2],
-                 strides=[4, 2, 2, 2],
+                 patch_sizes=[4, 1, 1, 1],
+                 strides=[4, 1, 1, 1],
                  paddings=[0, 0, 0, 0],
-                 sr_ratios=[1, 1, 1, 1],
+                 sr_ratios=[8, 4, 2, 1],
                  out_indices=(0, 1, 2, 3),
                  mlp_ratios=[8, 8, 4, 4],
+                 num_dilation=[0, 1, 2, 3],
                  qkv_bias=True,
                  drop_rate=0.,
                  attn_drop_rate=0.,
@@ -469,6 +546,8 @@ class PVT_try(BaseModule):
         self.out_indices = out_indices
         assert max(out_indices) < self.num_stages
         self.pretrained = pretrained
+        self.num_dilation = num_dilation
+
 
         # transformer encoder
         dpr = [
@@ -490,6 +569,9 @@ class PVT_try(BaseModule):
                 padding=paddings[i],
                 bias=True,
                 norm_cfg=norm_cfg)
+            
+            dilation=ModuleList()
+            dilation.extend([DilationConvModule(in_channels=embed_dims_i) for idx in range(num_dilation[i])])
 
             layers = ModuleList()
             if use_abs_pos_embed:
@@ -519,7 +601,7 @@ class PVT_try(BaseModule):
                 norm = build_norm_layer(norm_cfg, embed_dims_i)[1]
             else:
                 norm = nn.Identity()
-            self.layers.append(ModuleList([patch_embed, layers, norm]))
+            self.layers.append(ModuleList([patch_embed, layers, norm, dilation]))
             cur += num_layer
 
     def init_weights(self):
@@ -565,19 +647,30 @@ class PVT_try(BaseModule):
     def forward(self, x):
         outs = []
 
-        for i, layer in enumerate(self.layers):
-            x, hw_shape = layer[0](x)  #patch
+        for i, layer in enumerate(self.layers): # self.layers: 4stage
+            x, hw_shape = layer[0](x)  #patch 序列
             print("patch",x.size())
             print("hw_shape", hw_shape)
-            for block in layer[1]:   #layers
+
+            for block in layer[1]:   #layers: pos+pvtencoder
                 x = block(x, hw_shape)
                 print("pos,lay1,lay2",x.size())
+
             x = layer[2](x)  # norm
 
-            x = nlc_to_nchw(x, hw_shape)
+            x = nlc_to_nchw(x, hw_shape) # picture with samesize
+
+            x1=x
+        
+            for block in layer[3]: # dilation
+                x, hw_mid =block(x)
+                print("Dilation x:",x.size())
+                print("Dilation hw_mid:", hw_mid)
+
             if i in self.out_indices:
                 outs.append(x)
                 print(x.size())
                 print(len(outs))
 
+            x=x1
         return outs

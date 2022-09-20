@@ -160,3 +160,42 @@
                         1.  恢复整体的网络结构PVT, 取消patchEmbed的步长和尺度,进行1*1conv(尝试),看看是否会收敛.
 
                         2.  减少进入FPN的参数量,利用膨胀卷积进行构造,但保证骨干网络中计算的参数量不变.
+
+
+### *2022 0916*
+                *现在的问题:
+                        1. pvt_try可以收敛,1day可以训练出结果;
+                        2. PVTLSH不收敛,可能是因为我大量的改动了结构.
+                
+                *解决办法:
+                        1. 收敛PVTLSH:直接套用pvt的结构,不做修改.
+                                A. 取消pvt的分辨率变化;(samefeaturemap)
+                                B. 改用膨胀卷积方式缩减分辨率;
+                                (与pvt类似,只是在samefeaturemap的基础上增加膨胀卷积或者直接膨胀卷积计算嵌入)
+
+
+### *2022 0919*
+                *现在的问题:
+                        1. pvt_try和pvt_LSH是完全一样的配置参数,为什么训练出来的结果有差异;
+                                (可能是这一轮收敛的效果不太好导致的,因为其实大致的趋势差不多,甚至还处于上升阶段);
+                        
+                
+                *下一步:
+                        1. 在pvt_LSH的基础上,不改变featuremap分辨率大小(存在参数量过大的问题),看与pvt有什么区别.
+                        2. 在pvt_LSH的基础上看,仅仅去掉SA会有什么结果.
+                        3. 基于1.的结果在pvt_LSH上增加膨胀卷积部分.
+
+
+### *2022 0920*
+                *现在的问题:
+                        1. pvt_try取消了SA注意力,改用普通的自注意力,训练结果比采用SA注意力的提高了2%左右;
+                        SA注意力log:work_dirs/my_pvt_AtrousLSHTransformer_voc_same/20220916_103109.log;
+                        自注意力log:work_dirs/my_pvt_AtrousLSHTransformer_voc_same/20220919_101302.log.
+
+                        2. 直接修改patchembed中的patchsize和stride会导致模型训练loss不下降.
+
+                 *下一步:
+                        1. 试一试patchembed下的pad=same的方式,保证分辨率不变;
+                        2. 调研一下ViT是怎么进行分辨率不变的训练的;
+                        3. 基于1.的结果在pvt_LSH上增加膨胀卷积部分.
+                        
