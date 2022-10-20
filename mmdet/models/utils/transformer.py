@@ -90,7 +90,7 @@ class AdaptivePadding(nn.Module):
         >>> assert (out.shape[2], out.shape[3]) == (16, 32)
     """
 
-    def __init__(self, kernel_size=1, stride=1, dilation=1, padding='corner'):
+    def __init__(self, kernel_size=1, stride=1, dilation=1, padding='same'):
 
         super(AdaptivePadding, self).__init__()
 
@@ -120,14 +120,18 @@ class AdaptivePadding(nn.Module):
 
     def forward(self, x):
         pad_h, pad_w = self.get_pad_shape(x.size()[-2:])
+        #print("rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr")
         if pad_h > 0 or pad_w > 0:
             if self.padding == 'corner':
+                #print("cccccccccccccc")
                 x = F.pad(x, [0, pad_w, 0, pad_h])
             elif self.padding == 'same':
+                print("sssssssssssssss")
                 x = F.pad(x, [
                     pad_w // 2, pad_w - pad_w // 2, pad_h // 2,
                     pad_h - pad_h // 2
                 ])
+
         return x
 
 
@@ -166,7 +170,7 @@ class PatchEmbed(BaseModule):
         conv_type='Conv2d',
         kernel_size=16,
         stride=16,
-        padding='corner',
+        padding='same',
         dilation=1,
         bias=True,
         norm_cfg=None,
@@ -184,6 +188,7 @@ class PatchEmbed(BaseModule):
         dilation = to_2tuple(dilation)
 
         if isinstance(padding, str):
+            #print("111111111111")
             self.adap_padding = AdaptivePadding(
                 kernel_size=kernel_size,
                 stride=stride,
@@ -247,6 +252,7 @@ class PatchEmbed(BaseModule):
         """
 
         if self.adap_padding:
+            print("00000000000000000000000")
             x = self.adap_padding(x)
 
         x = self.projection(x)

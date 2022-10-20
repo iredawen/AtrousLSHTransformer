@@ -1,6 +1,9 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+from inspect import Parameter
 import math
+from re import X
 import warnings
+from xml.dom.domreg import well_known_implementations
 
 import numpy as np
 import torch
@@ -85,50 +88,29 @@ class MixFFN(BaseModule):
         drop = nn.Dropout(ffn_drop)
         layers = [fc1, activate, drop, fc2, drop]
         if use_conv:
-            layers.insert(1, dw_conv)
+            layers.insert(1, dw_conv)  #insert函数,在位置1插入dw_conv
         self.layers = Sequential(*layers)
         self.dropout_layer = build_dropout(
-            dropout_layer) if dropout_layer else torch.nn.Identity()
+            dropout_layer) if dropout_layer else torch.nn.Identity()  #torch.nn.Identity()是一个参数不敏感的占位符
 
     def forward(self, x, hw_shape, identity=None):
-        out = nlc_to_nchw(x, hw_shape)
+        out = nlc_to_nchw(x, hw_shape) #序列->图像
         out = self.layers(out)
-        out = nchw_to_nlc(out)
+        out = nchw_to_nlc(out) #image
         if identity is None:
-            identity = x
-        return identity + self.dropout_layer(out)
+            identity = x  #序列
+        return identity + self.dropout_layer(out)  #序列+图像
 
-
-class SpatialReductionAttention(MultiheadAttention):
-    """An implementation of Spatial Reduction Attention of PVT.
-
-    This module is modified from MultiheadAttention which is a module from
-    mmcv.cnn.bricks.transformer.
-
-    Args:
-        embed_dims (int): The embedding dimension.
-        num_heads (int): Parallel attention heads.
-        attn_drop (float): A Dropout layer on attn_output_weights.
-            Default: 0.0.
-        proj_drop (float): A Dropout layer after `nn.MultiheadAttention`.
-            Default: 0.0.
-        dropout_layer (obj:`ConfigDict`): The dropout_layer used
-            when adding the shortcut. Default: None.
-        batch_first (bool): Key, Query and Value are shape of
-            (batch, n, embed_dim)
-            or (n, batch, embed_dim). Default: False.
-        qkv_bias (bool): enable bias for qkv if True. Default: True.
-        norm_cfg (dict): Config dict for normalization layer.
-            Default: dict(type='LN').
-        sr_ratio (int): The ratio of spatial reduction of Spatial Reduction
-            Attention of PVT. Default: 1.
-        init_cfg (obj:`mmcv.ConfigDict`): The Config for initialization.
-            Default: None.
-    """
+class SpatialReductionAttention_ss(MultiheadAttention):
 
     def __init__(self,
                  embed_dims,
                  num_heads,
+                 win_len, #H, W
+                 q_len, #kernel_size
+                 sub_len, #参数
+                 scale=True,
+                 spare=False,
                  attn_drop=0.,
                  proj_drop=0.,
                  dropout_layer=None,
@@ -148,6 +130,14 @@ class SpatialReductionAttention(MultiheadAttention):
             init_cfg=init_cfg)
 
         self.sr_ratio = sr_ratio
+
+        self.win_len=win_len
+        self.q_len=q_len
+        self.sub_len=sub_len
+        self.spare=spare
+        self.split_size=embed_dims
+        self.scale=scale
+
         if sr_ratio > 1:
             self.sr = Conv2d(
                 in_channels=embed_dims,
@@ -156,6 +146,21 @@ class SpatialReductionAttention(MultiheadAttention):
                 stride=sr_ratio)
             # The ret[0] of build_norm_layer is norm name.
             self.norm = build_norm_layer(norm_cfg, embed_dims)[1]
+        
+        if(spare):
+            print("Active log Attentiion!!!!!!!!!!!")
+            self.log_mask_=log_mask(sub_len=sub_len)
+            #self.mask=self.log_mask(win_len=win_len, sub_len=sub_len)
+        else:
+            print("GG")
+            #self.mask=torch.tril(torch.ones(win_len, sub_len)).view(1, 1, win_len, sub_len)
+            #self.mask=torch.tril(torch.ones(win_len, sub_len)).view(win_len, sub_len)
+
+        print("embed is :",embed_dims) 
+        print("num_head is :",num_heads) 
+        self.query_key=nn.Conv1d(embed_dims, embed_dims*2, self.q_len)
+        self.value=Conv1D(embed_dims, 1, embed_dims//num_heads) #输出, 1, 输入
+        self.c_proj=Conv1D(embed_dims//num_heads, 1, embed_dims)
 
         # handle the BC-breaking from https://github.com/open-mmlab/mmcv/pull/1418 # noqa
         from mmdet import digit_version, mmcv_version
@@ -166,36 +171,93 @@ class SpatialReductionAttention(MultiheadAttention):
                           'future. Please upgrade your mmcv.')
             self.forward = self.legacy_forward
 
+    # def log_mask(self, win_len, sub_len):
+    #     mask=torch.zeros((win_len, win_len), dtype=torch.float)
+    #     for i in range(win_len):
+    #         mask[i]=self.row_mask(i, sub_len=sub_len, win_len=win_len)
+    #     # return mask.view(1, 1, mask.size(0), mask.size(1))  #[1, 1, win_len, win_len]
+    #     return mask.view(mask.size(0), mask.size(1))
+        
+    # def row_mask(self, index, sub_len, win_len):
+    #     log_l=math.ceil(np.log2(sub_len))
+    #     mask=torch.zeros((win_len), dtype=torch.float)
+    #     if((win_len//sub_len)*2*(log_l)>index):
+    #         mask[:(index+1)]=1
+    #     else:
+    #         while(index>=0):
+    #             if((index-log_l+1)<0):
+    #                 mask[:index]=1
+    #                 break
+    #             mask[index-log_l+1 : (index+1)]=1
+    #             for i in range(0, log_l):
+    #                 new_index=index-log_l+1-2**i
+    #                 if((index-new_index)<=sub_len and new_index>=0):
+    #                     mask[new_index]=1
+    #             index -= sub_len
+    #     return mask
+
+#***********************************************
     def forward(self, x, hw_shape, identity=None):
-
-        x_q = x
-        if self.sr_ratio > 1:
-            x_kv = nlc_to_nchw(x, hw_shape)
-            x_kv = self.sr(x_kv)
-            x_kv = nchw_to_nlc(x_kv)
-            x_kv = self.norm(x_kv)
-        else:
-            x_kv = x
-
+        print("what is the x:",x.size()) 
         if identity is None:
-            identity = x_q
+            identity=x
 
-        # Because the dataflow('key', 'query', 'value') of
-        # ``torch.nn.MultiheadAttention`` is (num_query, batch,
-        # embed_dims), We should adjust the shape of dataflow from
-        # batch_first (batch, num_query, embed_dims) to num_query_first
-        # (num_query ,batch, embed_dims), and recover ``attn_output``
-        # from num_query_first to batch_first.
+        if self.spare:
+            print("use spare")
+            mask=self.log_mask_(hw_shape)
+        else:
+            mask=None
+        #x_v=self.value(x)  #Conv1D  x=[B, N, C_in]->[B, N, C_out] 权重学习
+        x_v=x   #  x[B N C]
+        qk_x=F.pad(x.permute(0, 2, 1), pad=(self.q_len -1, 0)) #对N维度左边填充q_len个0 [B, N, C]->[B, C, N]
+        print("what is the qk_x:",qk_x.size()) 
+        query_key=self.query_key(qk_x).permute(0, 2, 1) #Conv1d [B, C, N]->[B, 2C, N]->[B, N, 2C] 一维卷积
+        #query_key=self.query_key(qk_x).permute(0, 2, 1)
+        x_q, x_k=query_key.split(self.split_size, dim=2) #[B, N, 2C]->2个[B, N, C]
+        
         if self.batch_first:
-            x_q = x_q.transpose(0, 1)
-            x_kv = x_kv.transpose(0, 1)
+            x_q=x_q.transpose(0, 1)
+            x_k=x_k.transpose(0, 1)
+            x_v=x_v.transpose(0, 1)
+        
+        print("what is the mask_shape:",mask.shape)
 
-        out = self.attn(query=x_q, key=x_kv, value=x_kv)[0]
-
+        out=self.attn(query=x_q, key=x_k, value=x_v,attn_mask=mask)[0]
+        
         if self.batch_first:
-            out = out.transpose(0, 1)
+            out=out.transpose(0, 1)
 
+        #attn=self.c_proj(out)  #[B N C]->w=[C, C_ori]  [B N C_ori, ]-> [B*N, C]*[C, C_ori]->[B*N, C_ori ]->[B N C_ori]
         return identity + self.dropout_layer(self.proj_drop(out))
+        # x_q = x #x_q不进行空间缩减,保持不变
+        # if self.sr_ratio > 1:
+        #     x_kv = nlc_to_nchw(x, hw_shape) #序列->图像
+        #     x_kv = self.sr(x_kv) #卷积缩减
+        #     x_kv = nchw_to_nlc(x_kv) #图像->序列
+        #     x_kv = self.norm(x_kv) 
+        # else:
+        #     x_kv = x #不进行缩减
+
+        # if identity is None:
+        #     identity = x_q
+
+        # # Because the dataflow('key', 'query', 'value') of
+        # # ``torch.nn.MultiheadAttention`` is (num_query, batch,
+        # # embed_dims), We should adjust the shape of dataflow from
+        # # batch_first (batch, num_query, embed_dims) to num_query_first
+        # # (num_query ,batch, embed_dims), and recover ``attn_output``
+        # # from num_query_first to batch_first.
+        # if self.batch_first:
+        #     x_q = x_q.transpose(0, 1) #[B,n,,D] -> [n, B, D]
+        #     x_kv = x_kv.transpose(0, 1)
+
+        # out = self.attn(query=x_q, key=x_kv, value=x_kv)[0]
+
+        # if self.batch_first:
+        #     out = out.transpose(0, 1) #恢复[n, B, D]->[B,n,,D]
+
+        # return identity + self.dropout_layer(self.proj_drop(out))
+
 
     def legacy_forward(self, x, hw_shape, identity=None):
         """multi head attention forward in mmcv version < 1.3.17."""
@@ -214,6 +276,285 @@ class SpatialReductionAttention(MultiheadAttention):
         out = self.attn(query=x_q, key=x_kv, value=x_kv)[0]
 
         return identity + self.dropout_layer(self.proj_drop(out))
+
+# class LogAttention(MultiheadAttention):
+#     def __init__(self, 
+#             embed_dims,  #embed_dims_i
+#             num_heads,  
+#             win_len, #H, W
+#             q_len, #kernel_size
+#             sub_len, #参数
+#             scale=True,
+#             spare=False,
+#             attn_drop=0, 
+#             proj_drop=0, 
+#             dropout_layer=None,  
+#             batch_first=False, 
+#             qkv_bias=True,
+#             norm_cfg=dict(type='LN'),
+#             init_cfg=None):
+#         super(LogAttention, self).__init__(
+#             embed_dims,
+#             num_heads,
+#             attn_drop,
+#             proj_drop,
+#             batch_first=batch_first,
+#             dropout_layer=dropout_layer,
+#             bias=qkv_bias,
+#             init_cfg=init_cfg
+#         )
+
+#         if(spare):
+#             print("Active log Attentiion!!!!!!!!!!!")
+#             self.mask=self.log_mask(win_len=win_len, sub_len=sub_len)
+#         else:
+#             print("GG")
+#             self.mask=torch.tril(torch.ones(win_len, sub_len)).view(1, 1, win_len, sub_len)
+            
+#         #self.register_buffer('mask_tri', mask)
+#         self.win_len=win_len
+#         self.q_len=q_len
+#         self.sub_len=sub_len
+#         self.spare=spare
+#         self.split_size=embed_dims
+
+
+#         self.scale=scale
+#         self.query_key=nn.Conv1d(embed_dims//num_heads, embed_dims*2, self.q_len)
+#         self.value=Conv1D(embed_dims, 1, embed_dims//num_heads) #输出, 1, 输入
+#         self.c_proj=Conv1D(embed_dims//num_heads, 1, embed_dims)
+
+
+#     def log_mask(self, win_len, sub_len):
+#         mask=torch.zeros((win_len, win_len), dtype=torch.float)
+#         for i in range(win_len):
+#             mask[i]=self.row_mask(i, sub_len=sub_len, win_len=win_len)
+#         return mask.view(1, 1, mask.size(0), mask.size(1))  #[1, 1, win_len, win_len]
+        
+#     def row_mask(self, index, sub_len, win_len):
+#         log_l=math.ceil(np.log2(sub_len))
+#         mask=torch.zeros((win_len), dtype=torch.float)
+#         if((win_len//sub_len)*2*(log_l)>index):
+#             mask[:(index+1)]=1
+#         else:
+#             while(index>=0):
+#                 if((index-log_l+1)<0):
+#                     mask[:index]=1
+#                     break
+#                 mask[index-log_l+1 : (index+1)]=1
+#                 for i in range(0, log_l):
+#                     new_index=index-log_l+1-2**i
+#                     if((index-new_index)<=sub_len and new_index>=0):
+#                         mask[new_index]=1
+#                 index -= sub_len
+#         return mask
+
+#     def forword(self, x, hw_shape, identity=None):  #x = [B N C]
+#         print("what is the x:",x.size()) 
+#         print(hw_shape)
+#         if identity is None:
+#             identity=x
+
+#         if self.spare:
+#             mask=self.mask[-2:]
+#         else:
+#             mask=None
+#         #x_v=self.value(x)  #Conv1D  x=[B, N, C_in]->[B, N, C_out] 权重学习
+#         x_v=x
+#         qk_x=F.pad(x.tranpose(0, 1), pad=(self.q_len -1, 0)) #对N维度左边填充q_len个0 [B, N, C]->[B, C, N]
+#         query_key=self.query_key(qk_x).tranpose(0, 1) #Conv1d [B, C, N]->[B, 2C, N]->[B, N, 2C] 一维卷积
+#         x_q, x_k=query_key.split(self.split_size, dim=2) #[B, N, 2C]->2个[B, N, C]
+#         print("*************************")
+        
+#         #if self.batch_first:
+#         query=query.tranpose(0, 1)
+#         print("herh?????????????????")
+#         key=key.tranpose(0, 1)
+#         value=value.tranpose(0, 1)
+#         out=self.attn(query=x_q, key=x_k, value=x_v,attn_mask=mask)[0]
+
+#         out=out.tranpose(0, 1)
+
+        
+#         attn=self.c_proj(out)  #[B N C]->w=[C, C_ori]  [B N C_ori, ]-> [B*N, C]*[C, C_ori]->[B*N, C_ori ]->[B N C_ori]
+#         return identity + self.dropout_layer(attn)
+
+# class LogAttention(nn.Module):
+#     def __init__(self, 
+#             embed_dims,  #embed_dims_i
+#             num_heads,  
+#             win_len, #H, W
+#             q_len, #kernel_size
+#             sub_len, #参数
+#             scale=True,
+#             spare=None,
+#             attn_drop=0, 
+#             proj_drop=0, 
+#             dropout_layer=None,  
+#             batch_first=True, 
+#             qkv_bias=True,
+#             norm_cfg=dict(type='LN'),
+#             init_cfg=None):
+#         super(LogAttention, self).__init__()
+
+#         if(spare):
+#             print("Active log Attentiion!!!!!!!!!!!")
+#             mask=self.log_mask(win_len=win_len, sub_len=sub_len)
+#         else:
+#             print("GG")
+#             mask=torch.tril(torch.ones(win_len, sub_len)).view(1, 1, win_len, sub_len)
+            
+#         self.register_buffer('mask_tri', mask)
+#         self.num_head_att=num_heads
+#         #self.split_size=embed_dims*self.num_heads  #类似于embed_dims_i = embed_dims * num_heads[i]
+#         self.split_size=embed_dims
+#         self.scale=scale
+#         self.q_len=q_len #kernel_size
+#         self.query_key=nn.Conv1d(embed_dims//num_heads, embed_dims*2, self.q_len)
+#         self.value=Conv1D(embed_dims, 1, embed_dims//num_heads) #输出, 1, 输入
+#         self.c_proj=Conv1D(embed_dims//num_heads, 1, embed_dims)
+#         self.attn_drop=nn.Dropout(attn_drop)
+#         self.resid_drop=nn.Dropout(proj_drop)
+
+
+#     def log_mask(self, win_len, sub_len):
+#         mask=torch.zeros((win_len, win_len), dtype=torch.float)
+#         for i in range(win_len):
+#             mask[i]=self.row_mask(i, sub_len=sub_len, win_len=win_len)
+#         return mask.view(1, 1, mask.size(0), mask.size(1))  #[1, 1, win_len, win_len]
+        
+#     def row_mask(self, index, sub_len, win_len):
+#         log_l=math.ceil(np.log2(sub_len))
+#         mask=torch.zeros((win_len), dtype=torch.float)
+#         if((win_len//sub_len)*2*(log_l)>index):
+#             mask[:(index+1)]=1
+#         else:
+#             while(index>=0):
+#                 if((index-log_l+1)<0):
+#                     mask[:index]=1
+#                     break
+#                 mask[index-log_l+1 : (index+1)]=1
+#                 for i in range(0, log_l):
+#                     new_index=index-log_l+1-2**i
+#                     if((index-new_index)<=sub_len and new_index>=0):
+#                         mask[new_index]=1
+#                 index -= sub_len
+#         return mask
+        
+#     def attn(self, query:torch.Tensor, key, value:torch.Tensor, act_cfg=dict(type='Softmax')):
+#         self.act_cfg=act_cfg
+#         activation=build_activation_layer(act_cfg)#??
+#         pre_att=torch.matmul(query, key)
+#         if self.scale:
+#             pre_att=pre_att/math.sqrt(value.size(-1))
+#         mask=self.mask_tri[:, :, pre_att.size(-2), pre_att.size(-1)]
+#         pre_att=pre_att*mask+ -1e9*(1-mask)
+#         pre_att=activation(pre_att)
+#         pre_att=self.attn_drop(pre_att)
+#         attn=torch.matmul(pre_att, value)
+
+#         return attn
+
+#     def merge_head(self, x): 
+#         x= x.permute(0, 2, 1, 3).contiguous() #[B, H, N, C_h]->[B, N, H, C_h]
+#         new_x_shape=x.size()[:-2] + (x.size(-2)*x.size(-1), ) #[B, N, H*C_h]->[B N C]
+#         return x.view(*new_x_shape)
+        
+#     def split_head(self, x, k=False): #x  [B N C]
+#         new_x_shape = x.size()[:-1] + (self.num_head_att, x.size(-1)//self.num_head_att) #[B, N, H, C_h]
+#         x=x.view(*new_x_shape)
+#         if k:
+#             return x.permute(0, 2, 3, 1) #[B, H, C_h, N]
+#         else:
+#             return x.permute(0, 2, 1, 3) #[B, H, N, C_h]
+
+#     def forword(self, x, hw_shape, identity=None):  #x = [B N C]
+#         if identity is None:
+#             identity=x
+#         print("attention!!!!!!!!!!!!!!!!!!!!!!!!!!!!")    
+#         value=self.value(x)  #Conv1D  x=[B, N, C_in]->[B, N, C_out] 权重学习
+#         qk_x=F.pad(x.permute(0, 2, 1), pad=(self.q_len -1, 0)) #对N维度左边填充q_len个0 [B, N, C]->[B, C, N]
+#         query_key=self.query_key(qk_x).permute(0, 2, 1) #Conv1d [B, C, N]->[B, 2C, N]->[B, N, 2C] 一维卷积
+#         query, key=query_key.split(self.split_size, dim=2) #[B, N, 2C]->2个[B, N, C]
+#         query=self.split_head(query) #[B, N, C]->[B, H, N, C_h]
+#         key=self.split_head(key, k=True)#[B, N, C]->[B, H, C_h, N]
+#         value=self.split_head(value) #[B, N, C]->[B, H, N, C_h]
+#         attn=self.attn(query, key, value) #[B, H, N, N]*[B, H, N, C_h]->[B, H, N, C_h]
+#         attn=self.merge_head(attn)#[B, H, N, C_h]->[B N C]
+#         attn=self.c_proj(attn)  #[B N C]->w=[C, C_ori]  [B N C_ori, ]-> [B*N, C]*[C, C_ori]->[B*N, C_ori ]->[B N C_ori]
+#         attn=self.resid_drop(attn)
+#         return attn+identity
+
+class  log_mask(nn.Module):
+    def __init__(self,
+                 sub_len):
+        super(log_mask, self).__init__()
+        self.sub_len=sub_len
+
+    def log_mask_func(self, hw_shape):
+        print("++++++++++++++++++++++++")
+        H,W=hw_shape
+        win_len=H*W
+        mask=torch.zeros((win_len, win_len), dtype=torch.float)
+        print(type(mask))
+        print(mask[0].size())
+        for i in range(win_len):
+            
+            mask[i]=self.row_mask(index=i, sub_len=self.sub_len, win_len=win_len)
+        # return mask.view(1, 1, mask.size(0), mask.size(1))  #[1, 1, win_len, win_len]
+        print("hw_size", hw_shape)
+        print(mask.shape)
+        return mask.view(mask.size(0), mask.size(1))
+
+    def row_mask(self, index, sub_len, win_len):
+        log_l=math.ceil(np.log2(sub_len))
+        
+        mask=torch.zeros((win_len), dtype=torch.float)
+        if((win_len//sub_len)*2*(log_l)>index):
+            mask[:(index+1)]=1
+        else:
+            while(index>=0):
+                if((index-log_l+1)<0):
+                    mask[:index]=1
+                    break
+                mask[index-log_l+1 : (index+1)]=1
+                for i in range(0, log_l):
+                    new_index=index-log_l+1-2**i
+                    if((index-new_index)<=sub_len and new_index>=0):
+                        mask[new_index]=1
+                index -= sub_len
+        return mask
+
+    def forward(self, hw_shape):
+        mask=self.log_mask_func(hw_shape)
+        return mask
+
+
+class Conv1D(nn.Module):
+    def __init__(self, out_dim, rf, in_dim):
+        super(Conv1D, self).__init__()
+        self.rf=rf
+        self.out_dim=out_dim
+        if rf==1:
+            w=torch.empty(in_dim, out_dim)
+            nn.init.normal_(w, std=0.02)
+            self.w=torch.nn.Parameter(w)
+            self.b=torch.nn.Parameter(torch.zeros(out_dim))
+            print("&&&&&&&&&&&&&&&&&&&&&&&&7")
+        else:
+            print("111111111111111111111111111122222222222")
+            raise NotImplementedError
+    
+    def forword(self, x): #x=[B N C] 
+        if self.rf==1:
+            size_out=x.size()[:-1]+(self.out_dim, ) #[B, N]->[B, N, C_out, ]
+            x=torch.addmm(self.b, x.view(-1, x.size(-1)), self.w) #[B*N, C_in]X[C_in, C_out]->[B*N, C_out]
+            x=x.view(*size_out) #[B, N, C_out]
+            print("#################################")
+        else:
+            print("^^666666666666666666666666666666666")
+            raise NotImplementedError
+        return x
 
 
 class PVTEncoderLayer(BaseModule):
@@ -246,6 +587,9 @@ class PVTEncoderLayer(BaseModule):
                  embed_dims,
                  num_heads,
                  feedforward_channels,
+                 win_len, 
+                 q_len, 
+                 sub_len,
                  drop_rate=0.,
                  attn_drop_rate=0.,
                  drop_path_rate=0.,
@@ -260,15 +604,29 @@ class PVTEncoderLayer(BaseModule):
         # The ret[0] of build_norm_layer is norm name.
         self.norm1 = build_norm_layer(norm_cfg, embed_dims)[1]
 
-        self.attn = SpatialReductionAttention(
-            embed_dims=embed_dims,
+        # self.attn = SpatialReductionAttention(
+        #     embed_dims=embed_dims,
+        #     num_heads=num_heads,
+        #     attn_drop=attn_drop_rate,
+        #     proj_drop=drop_rate,
+        #     dropout_layer=dict(type='DropPath', drop_prob=drop_path_rate),
+        #     qkv_bias=qkv_bias,
+        #     norm_cfg=norm_cfg,
+        #     sr_ratio=sr_ratio)
+        
+        self.attn= SpatialReductionAttention_ss(
+            embed_dims=embed_dims,  #embed_dims_i
             num_heads=num_heads,
-            attn_drop=attn_drop_rate,
-            proj_drop=drop_rate,
-            dropout_layer=dict(type='DropPath', drop_prob=drop_path_rate),
+            win_len=win_len,
+            q_len=q_len, 
+            sub_len=sub_len,
+            scale=True,
+            spare=True,
+            attn_drop=attn_drop_rate, 
+            proj_drop=drop_rate, 
+            dropout_layer=dict(type='DropPath', drop_prob=drop_path_rate),  
             qkv_bias=qkv_bias,
-            norm_cfg=norm_cfg,
-            sr_ratio=sr_ratio)
+            norm_cfg=norm_cfg)
 
         # The ret[0] of build_norm_layer is norm name.
         self.norm2 = build_norm_layer(norm_cfg, embed_dims)[1]
@@ -282,8 +640,16 @@ class PVTEncoderLayer(BaseModule):
             act_cfg=act_cfg)
 
     def forward(self, x, hw_shape):
+        print("here?")
+        z=self.norm1(x)
+        print("norm1_size is",z.size())
+        print("type x",type(x))
         x = self.attn(self.norm1(x), hw_shape, identity=x)
+        print("here?")
         x = self.ffn(self.norm2(x), hw_shape, identity=x)
+        
+        # x = self.attn(self.norm1(x))  type x <class 'torch.Tensor'>
+        # x = self.ffn(self.norm2(x))
 
         return x
 
@@ -302,7 +668,7 @@ class AbsolutePositionEmbedding(BaseModule):
         super().__init__(init_cfg=init_cfg)
 
         if isinstance(pos_shape, int):
-            pos_shape = to_2tuple(pos_shape)
+            pos_shape = to_2tuple(pos_shape) #pre_image_size/patch_size = 令牌快的个数 -> 扩展为2维
         elif isinstance(pos_shape, tuple):
             if len(pos_shape) == 1:
                 pos_shape = to_2tuple(pos_shape[0])
@@ -313,11 +679,11 @@ class AbsolutePositionEmbedding(BaseModule):
         self.pos_dim = pos_dim
 
         self.pos_embed = nn.Parameter(
-            torch.zeros(1, pos_shape[0] * pos_shape[1], pos_dim))
+            torch.zeros(1, pos_shape[0] * pos_shape[1], pos_dim)) #pos_shape[0] * pos_shape[1] 令牌快的数量 [ 1 N C ]
         self.drop = nn.Dropout(p=drop_rate)
 
     def init_weights(self):
-        trunc_normal_(self.pos_embed, std=0.02)
+        trunc_normal_(self.pos_embed, std=0.02) #截断正态分布,限制变量的范围
 
     def resize_pos_embed(self, pos_embed, input_shape, mode='bilinear'):
         """Resize pos_embed weights.
@@ -336,15 +702,15 @@ class AbsolutePositionEmbedding(BaseModule):
             torch.Tensor: The resized pos_embed of shape [B, L_new, C].
         """
         assert pos_embed.ndim == 3, 'shape of pos_embed must be [B, L, C]'
-        print(self.pos_shape)
+        print(self.pos_shape) #分快数
         pos_h, pos_w = self.pos_shape
-        pos_embed_weight = pos_embed[:, (-1 * pos_h * pos_w):]
+        pos_embed_weight = pos_embed[:, (-1 * pos_h * pos_w):] #每一个B的第一个N所有维度C输出
         pos_embed_weight = pos_embed_weight.reshape(
-            1, pos_h, pos_w, self.pos_dim).permute(0, 3, 1, 2).contiguous()
+            1, pos_h, pos_w, self.pos_dim).permute(0, 3, 1, 2).contiguous() #[1 C h w ]
         pos_embed_weight = F.interpolate(
-            pos_embed_weight, size=input_shape, mode=mode)
+            pos_embed_weight, size=input_shape, mode=mode) #向上/下采样到任意给定尺寸[1 C h w]->[1 C H W]
         pos_embed_weight = torch.flatten(pos_embed_weight,
-                                         2).transpose(1, 2).contiguous()
+                                         2).transpose(1, 2).contiguous() #从第二维展开[1 C H W ]->[1 C N]->[1 N C]
         pos_embed = pos_embed_weight
 
         return pos_embed
@@ -430,7 +796,7 @@ class DilationConvModule(nn.Module):
         return x
 
 @BACKBONES.register_module()
-class PVT_LSH(BaseModule):
+class PVT_LSH_attention(BaseModule):
     """Pyramid Vision Transformer (PVT)
 
     Implementation of `Pyramid Vision Transformer: A Versatile Backbone for
@@ -491,14 +857,16 @@ class PVT_LSH(BaseModule):
                  #num_layers=[3, 4, 6, 3],
                  num_layers=[2, 2, 2, 2], #tiny
                  num_heads=[1, 2, 5, 8],
-                 patch_sizes=[7, 3, 3, 3],
-                 #patch_sizes=[4, 2, 2, 2],
+                 patch_sizes=[4, 2, 2, 2],
                  strides=[4, 1, 1, 1],
                  #paddings=[0, 0, 0, 0],
-                 paddings=[3, 'same', 'same', 'same'],
+                 paddings=[0, 'same', 'same', 'same'],
                  #dilations=[1, 2, 5, 7],
                  #dilations=[1, 1, 1, 1],
                  sr_ratios=[8, 4, 2, 1],
+                 win_len=2688, 
+                 q_len=8, 
+                 sub_len=8,
                  #sr_ratios=[1, 1, 1, 1],
                  out_indices=(0, 1, 2, 3),
                  mlp_ratios=[8, 8, 4, 4],
@@ -506,9 +874,9 @@ class PVT_LSH(BaseModule):
                  drop_rate=0.,
                  attn_drop_rate=0.,
                  drop_path_rate=0.1,
-                 use_abs_pos_embed=False,
-                 norm_after_stage=True,  
-                 use_conv_ffn=True,  #使用DWconv
+                 use_abs_pos_embed=True,
+                 norm_after_stage=False,
+                 use_conv_ffn=False,
                  act_cfg=dict(type='GELU'),
                  norm_cfg=dict(type='LN', eps=1e-6),
                  pretrained=None,
@@ -590,6 +958,9 @@ class PVT_LSH(BaseModule):
                     embed_dims=embed_dims_i,
                     num_heads=num_heads[i],
                     feedforward_channels=mlp_ratios[i] * embed_dims_i,
+                    win_len=win_len, 
+                    q_len=q_len, 
+                    sub_len=sub_len,
                     drop_rate=drop_rate,
                     attn_drop_rate=attn_drop_rate,
                     drop_path_rate=dpr[cur + idx],

@@ -9,7 +9,7 @@ model = dict(
     type='RetinaNet',
     backbone=dict(
         _delete_=True,
-        type='PVT_LSH',
+        type='PVT_LSH_attention',
         #num_layers=[2, 2, 2, 2],#重写为tiny版本,已在PVT_AtrousLSHTransformer中修改
         init_cfg=dict(checkpoint='/home/dl4/x/AtrousLSHTransformer/'
                       'checkpoints/retinanet_pvt-t_fpn_1x_coco_20210831_103110-17b566bd.pth')),

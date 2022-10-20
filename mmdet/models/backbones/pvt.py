@@ -414,9 +414,9 @@ class PyramidVisionTransformer(BaseModule):
                  num_stages=4,
                  num_layers=[3, 4, 6, 3],
                  num_heads=[1, 2, 5, 8],
-                 patch_sizes=[4, 2, 2, 2],
+                 patch_sizes=[4, 2, 2, 2],#[7,3,3,3]
                  strides=[4, 2, 2, 2],
-                 paddings=[0, 0, 0, 0],
+                 paddings=[0, 0, 0, 0],#[3,1,1,1]
                  sr_ratios=[8, 4, 2, 1],
                  out_indices=(0, 1, 2, 3),
                  mlp_ratios=[8, 8, 4, 4],
